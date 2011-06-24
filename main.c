@@ -18,6 +18,8 @@ typedef struct solucao {
     shard** shards;
     int obj;
     int numShardsFot;
+    int* capacH;
+    int* capacV;
 } solucao;
 
 void checaAlocacaoMemoria( void* ptr )
@@ -183,9 +185,9 @@ solucao* constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** c
         }
     }
     
-    free( capacH );
-    free( capacV );
-    capacH = capacV = NULL;
+    //free( capacH );
+    //free( capacV );
+    //capacH = capacV = NULL;
     
     for( k=0; k<2*numShards; k++ )
         free( vetorShards[k] );
@@ -223,6 +225,8 @@ solucao* constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** c
             }
         }
     }
+    sol->capacH = capacH;
+    sol->capacV = capacV;
     
     return sol;
 }
@@ -288,6 +292,37 @@ void desaloca( int* Sh, int* Sv, int** ganhos, int** custosH, int** custosV, cha
     sol = NULL;
 }
 
+void melhoraSolucao( solucao* sol, int** ganhos, int** custosH, int** custosV, int numShards )
+{
+    int i;
+    shard* s;
+    int* capacH = sol->capacH;
+    int* capacV = sol->capacV;
+    
+    for( i=0; i<numShards; i++ )
+    {
+        s = sol->shards[i];
+        if( s->sat != 'n' )
+        {
+            continue;
+        }
+        if( custosH[s->i][s->j] <= capacH[s->i] )
+        {
+            s->sat = 'h';
+            sol->obj += ganhos[s->i][s->j];
+            sol->numShardsFot++;
+            capacH[s->i] -= custosH[s->i][s->j];
+        }
+        else if( custosV[s->i][s->j] <= capacV[s->j] )
+        {
+            s->sat = 'v';
+            sol->obj += ganhos[s->i][s->j];
+            sol->numShardsFot++;
+            capacV[s->j] -= custosV[s->i][s->j];
+        }
+    }
+}
+
 int main( int argc, char *argv[] )
 {
     FILE* entrada;
@@ -347,6 +382,8 @@ int main( int argc, char *argv[] )
     fclose( entrada );
     
     sol = constroiSolucao( Sh, Sv, ganhos, custosH, custosV, shards, numSats, numShards );
+    
+    melhoraSolucao( sol, ganhos, custosH, custosV, numShards );
     
     escreveSaida( sol, numShards, saida );
     
