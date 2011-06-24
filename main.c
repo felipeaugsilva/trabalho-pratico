@@ -3,13 +3,12 @@
 #include <string.h>
 
 
-typedef enum boolean { false, true } boolean;
-
 typedef struct shard {
     int i, j;
     float ganhoPorCusto;
     char sat;
 } shard;
+
 
 void alocaVetor( int** vetor, int numSats)
 {
@@ -34,14 +33,14 @@ void alocaMatrizChar( char*** matriz, int numSats )
         (*matriz)[i] = (char*) malloc( numSats * sizeof(char) );
 }
 
-void leSatelites( int* S, int numSats, FILE* dados )
+void leSatelites( int* S, int numSats, FILE* entrada )
 {
     int i, indice;
     
     for( i=0; i<numSats; i++)
     {
-        fscanf( dados, "%d", &indice );
-        fscanf( dados, "%d", &S[indice-1] );
+        fscanf( entrada, "%d", &indice );
+        fscanf( entrada, "%d", &S[indice-1] );
     }
 }
 
@@ -60,14 +59,14 @@ void inicializaMatrizes( int** ganhos, int** custosH, int** custosV, char** shar
     }
 }
 
-void leShards( int** ganhos, int** custosH, int** custosV, int numSats, int numShards, FILE* dados )
+void leShards( int** ganhos, int** custosH, int** custosV, int numSats, int numShards, FILE* entrada )
 {
     int i, j, k;
     int ganho, custoH, custoV;
     
     for( k=0; k<numShards; k++)
     {
-        fscanf( dados, "%d %d %d %d %d", &i, &j, &ganho, &custoH, &custoV );
+        fscanf( entrada, "%d %d %d %d %d", &i, &j, &ganho, &custoH, &custoV );
         ganhos[i-1][j-1] = ganho;
         custosH[i-1][j-1] = custoH;
         custosV[i-1][j-1] = custoV;
@@ -153,45 +152,86 @@ void constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** custo
     free( capacV );
 }
 
-int calculaObjetivo( int** ganhos, char** shards, int numSats )
+void calculaObjetivo( int* obj, int* numShardsFot, int** ganhos, char** shards, int numSats )
 {
-    int obj = 0;
     int i, j;
-    char sat;
+    
+    *obj = *numShardsFot = 0;
     
     for( i=0; i<numSats; i++)
     {
         for( j=0; j<numSats; j++ )
         {
-            sat = shards[i][j];
-            if( sat != 'n' )
+            if( shards[i][j] != 'n' )
             {
-                obj += ganhos[i][j];
-                //printf( "%3d %3d %c\n", i+1, j+1, sat );  // imprimir no arquivo de saida
+                *obj += ganhos[i][j];
+                (*numShardsFot)++;
             }
         }
     }
-    
-    return obj;
 }
 
-int calculaOtimo( int** ganhos, int numSats )
+void escreveSaida( int obj, int numShardsFot, char** shards, int numSats, FILE* saida )
 {
-    int otimo = 0;
+    int i, j;
+    
+    fprintf( saida, "%d\n%d\n", obj, numShardsFot );
+    
+    for( i=0; i<numSats; i++)
+    {
+        for( j=0; j<numSats; j++ )
+        {
+            if( shards[i][j] != 'n' )
+            {
+                fprintf( saida, "%d %d %c\n", i+1, j+1, shards[i][j] );
+            }
+        }
+    }
+}
+
+int calculaTotal( int** ganhos, int numSats )
+{
+    int total = 0;
     int i, j;
     
     for( i=0; i<numSats; i++)
         for( j=0; j<numSats; j++ )
             if( ganhos[i][j] > 0 )
-                otimo += ganhos[i][j];
+                total += ganhos[i][j];
     
-    return otimo;
+    return total;
+}
+
+void desaloca( int* Sh, int* Sv, int** ganhos, int** custosH, int** custosV, char** shards, int numSats )
+{
+    int i;
+    
+    free( Sh );
+    free( Sv );
+    
+    for( i=0; i<numSats; i++ )
+    {
+        free( ganhos[i] );
+        free( custosH[i] );
+        free( custosV[i] );
+        free( shards[i] );
+    }
+    
+    free( ganhos );
+    free( custosH );
+    free( custosV );
+    free( shards );
+    
+    Sh = Sv = NULL;
+    ganhos = custosH = custosV = NULL;
+    shards = NULL;
 }
 
 int main( int argc, char *argv[] )
 {
-    FILE * dados;
-    dados = fopen( "dados.in", "r");
+    FILE* entrada;
+    FILE* saida;
+    int tempo;
     int numSats;
     int numShards;
     int* Sh;
@@ -201,16 +241,39 @@ int main( int argc, char *argv[] )
     int** custosV;
     char** shards;
     int obj;
+    int numShardsFot;
     
-    fscanf( dados, "%d", &numSats );
+    if( argc != 6 )
+    {
+        fprintf( stderr, "Usage: heur -t <tempo> -o <saida> <entrada>\n" );
+        return 1;
+    }
+    
+    tempo = atoi( argv[2] );
+    
+    saida = fopen( argv[4], "w+" );
+    if( saida == NULL )
+    {
+        fprintf( stderr, "Erro: nao foi posivel criar arquivo %s\n", argv[4] );
+        return 1;
+    }
+    
+    entrada = fopen( argv[5], "r" );
+    if( entrada == NULL )
+    {
+        fprintf( stderr, "Erro: arquivo %s nao encontrado\n", argv[5] );
+        return 1;
+    }
+    
+    fscanf( entrada, "%d", &numSats );
     
     alocaVetor( &Sh, numSats );
     alocaVetor( &Sv, numSats );
     
-    leSatelites( Sh, numSats, dados);
-    leSatelites( Sv, numSats, dados);
+    leSatelites( Sh, numSats, entrada );
+    leSatelites( Sv, numSats, entrada );
    
-    fscanf( dados, "%d", &numShards);
+    fscanf( entrada, "%d", &numShards );
     
     alocaMatrizInt( &ganhos, numSats );
     alocaMatrizInt( &custosH, numSats );
@@ -219,20 +282,26 @@ int main( int argc, char *argv[] )
     
     inicializaMatrizes( ganhos, custosH, custosV, shards, numSats );
     
-    leShards( ganhos, custosH, custosV, numSats, numShards, dados );
+    leShards( ganhos, custosH, custosV, numSats, numShards, entrada );
     
-    fclose( dados );
+    fclose( entrada );
     
     constroiSolucao( Sh, Sv, ganhos, custosH, custosV, shards, numSats, numShards );
     
-    obj = calculaObjetivo( ganhos, shards, numSats );
+    calculaObjetivo( &obj, &numShardsFot, ganhos, shards, numSats );
     
-    printf( "\nFuncao Objetivo: %d\n\n", obj );
+    escreveSaida( obj, numShardsFot, shards, numSats, saida );
     
-    /* Usado apenas pra calcular porcentagem em relacao ao valor "otimo" */
-    int otimo = calculaOtimo( ganhos, numSats );
-    printf( "Valor Otimo: %d\n\n", otimo );
-    printf( "Porcentagem: %f\n\n", ((float) obj / otimo) * 100 );
+    fclose( saida );
+    
+    /* Usado apenas pra verificacao ****************************/
+    int total = calculaTotal( ganhos, numSats );
+    printf( "\nFuncao Objetivo: %d\n", obj );
+    printf( "Valor Total:     %d\n", total );
+    printf( "Porcentagem:     %f\n\n", ((float) obj / total) * 100 );
+    /***********************************************************/
+    
+    desaloca( Sh, Sv, ganhos, custosH, custosV, shards, numSats );
     
     return 0;
 }
