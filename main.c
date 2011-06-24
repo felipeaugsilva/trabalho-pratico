@@ -3,16 +3,36 @@
 #include <string.h>
 
 
-typedef struct shard {
+typedef struct shardAux {
     int i, j;
     float ganhoPorCusto;
     char sat;
+} shardAux;
+
+typedef struct shard {
+    int i, j;
+    char sat;
 } shard;
 
+typedef struct solucao {
+    shard** shards;
+    int obj;
+    int numShardsFot;
+} solucao;
+
+void checaAlocacaoMemoria( void* ptr )
+{
+    if( ptr == NULL )
+    {
+        fprintf( stderr, "Erro: nao foi possivel alocar memoria.\n" );
+        exit (1);
+    }
+}
 
 void alocaVetor( int** vetor, int numSats)
 {
     *vetor = (int*) malloc( numSats * sizeof(int) );
+    checaAlocacaoMemoria( *vetor );
 }
 
 void alocaMatrizInt( int*** matriz, int numSats )
@@ -20,8 +40,13 @@ void alocaMatrizInt( int*** matriz, int numSats )
     int i;
     
     *matriz = (int**) malloc( numSats * sizeof(int*) );
+    checaAlocacaoMemoria( *matriz );
+    
     for( i=0; i<numSats; i++)
+    {
         (*matriz)[i] = (int*) malloc( numSats * sizeof(int) );
+        checaAlocacaoMemoria( (*matriz)[i] );
+    }
 }
 
 void alocaMatrizChar( char*** matriz, int numSats )
@@ -29,8 +54,13 @@ void alocaMatrizChar( char*** matriz, int numSats )
     int i;
     
     *matriz = (char**) malloc( numSats * sizeof(char*) );
+    checaAlocacaoMemoria( *matriz );
+    
     for( i=0; i<numSats; i++)
+    {
         (*matriz)[i] = (char*) malloc( numSats * sizeof(char) );
+        checaAlocacaoMemoria( (*matriz)[i] );
+    }
 }
 
 void leSatelites( int* S, int numSats, FILE* entrada )
@@ -75,11 +105,11 @@ void leShards( int** ganhos, int** custosH, int** custosV, int numSats, int numS
 
 int comparaGanhoPorCusto( const void* a, const void* b )
 {
-    shard** shardAptr = (shard**) a;
-    shard** shardBptr = (shard**) b;
+    shardAux** shardAptr = (shardAux**) a;
+    shardAux** shardBptr = (shardAux**) b;
     
-    shard* shardA = *shardAptr;
-    shard* shardB = *shardBptr;
+    shardAux* shardA = *shardAptr;
+    shardAux* shardB = *shardBptr;
     
     if( shardA->ganhoPorCusto > shardB->ganhoPorCusto )
         return -1;
@@ -87,9 +117,10 @@ int comparaGanhoPorCusto( const void* a, const void* b )
     return ( shardA->ganhoPorCusto < shardB->ganhoPorCusto );
 }
 
-void constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** custosV, char** shards, int numSats, int numShards )
+solucao* constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** custosV, char** shards, int numSats, int numShards )
 {
-    shard** vetorShards;
+    solucao* sol;
+    shardAux** vetorShards;
     int* capacH;
     int* capacV;
     int i, j, k;
@@ -100,9 +131,13 @@ void constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** custo
     memcpy( capacH, Sh, numSats * sizeof(int) );
     memcpy( capacV, Sv, numSats * sizeof(int) );
     
-    vetorShards = (shard**) malloc( 2 * numShards * sizeof(shard*) );
+    vetorShards = (shardAux**) malloc( 2 * numShards * sizeof(shardAux*) );
+    checaAlocacaoMemoria( vetorShards );
     for( k=0; k<2*numShards; k++ )
-        vetorShards[k] = (shard*) malloc( sizeof(shard) );
+    {
+        vetorShards[k] = (shardAux*) malloc( sizeof(shardAux) );
+        checaAlocacaoMemoria( vetorShards[k] );
+    }
     
     k = 0;
     for( i=0; i<numSats; i++ )
@@ -126,7 +161,7 @@ void constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** custo
         }
     }
     
-    qsort( vetorShards, 2*numShards, sizeof(shard*), comparaGanhoPorCusto );
+    qsort( vetorShards, 2*numShards, sizeof(shardAux*), comparaGanhoPorCusto );
     
     for( k=0; k<2*numShards; k++ )
     {
@@ -150,41 +185,59 @@ void constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** custo
     
     free( capacH );
     free( capacV );
-}
-
-void calculaObjetivo( int* obj, int* numShardsFot, int** ganhos, char** shards, int numSats )
-{
-    int i, j;
+    capacH = capacV = NULL;
     
-    *obj = *numShardsFot = 0;
+    for( k=0; k<2*numShards; k++ )
+        free( vetorShards[k] );
+    free( vetorShards );
+    vetorShards = NULL;
     
-    for( i=0; i<numSats; i++)
+    sol = (solucao*) malloc( sizeof(solucao) );
+    checaAlocacaoMemoria( sol );
+    sol->shards = (shard**) malloc( numShards * sizeof(shard*) );
+    checaAlocacaoMemoria( sol->shards );
+    for( k=0; k<numShards; k++ )
+    {
+        sol->shards[k] = (shard*) malloc( sizeof(shard) );
+        checaAlocacaoMemoria( sol->shards[k] );
+    }
+    
+    k=0;
+    sol->obj = sol->numShardsFot = 0;
+    for( i=0; i<numSats; i++ )
     {
         for( j=0; j<numSats; j++ )
         {
-            if( shards[i][j] != 'n' )
+            if( ganhos[i][j] != 0 )
             {
-                *obj += ganhos[i][j];
-                (*numShardsFot)++;
+                sol->shards[k]->i = i;
+                sol->shards[k]->j = j;
+                sol->shards[k]->sat = shards[i][j];
+                k++;
+                
+                if( shards[i][j] != 'n' )
+                {
+                    sol->obj += ganhos[i][j];
+                    sol->numShardsFot++;
+                }
             }
         }
     }
+    
+    return sol;
 }
 
-void escreveSaida( int obj, int numShardsFot, char** shards, int numSats, FILE* saida )
+void escreveSaida( solucao* sol, int numShards, FILE* saida )
 {
-    int i, j;
+    int k;
     
-    fprintf( saida, "%d\n%d\n", obj, numShardsFot );
+    fprintf( saida, "%d\n%d\n", sol->obj, sol->numShardsFot );
     
-    for( i=0; i<numSats; i++)
+    for( k=0; k<numShards; k++ )
     {
-        for( j=0; j<numSats; j++ )
+        if( sol->shards[k]->sat != 'n' )
         {
-            if( shards[i][j] != 'n' )
-            {
-                fprintf( saida, "%d %d %c\n", i+1, j+1, shards[i][j] );
-            }
+            fprintf( saida, "%d %d %c\n", sol->shards[k]->i + 1, sol->shards[k]->j + 1, sol->shards[k]->sat );
         }
     }
 }
@@ -202,12 +255,14 @@ int calculaTotal( int** ganhos, int numSats )
     return total;
 }
 
-void desaloca( int* Sh, int* Sv, int** ganhos, int** custosH, int** custosV, char** shards, int numSats )
+void desaloca( int* Sh, int* Sv, int** ganhos, int** custosH, int** custosV, char** shards, solucao* sol, int numSats, int numShards )
 {
     int i;
     
     free( Sh );
     free( Sv );
+    
+    Sh = Sv = NULL;
     
     for( i=0; i<numSats; i++ )
     {
@@ -222,9 +277,15 @@ void desaloca( int* Sh, int* Sv, int** ganhos, int** custosH, int** custosV, cha
     free( custosV );
     free( shards );
     
-    Sh = Sv = NULL;
     ganhos = custosH = custosV = NULL;
     shards = NULL;
+    
+    for( i=0; i<numShards; i++ )
+        free( sol->shards[i] );
+    free( sol->shards );
+    free( sol);
+    
+    sol = NULL;
 }
 
 int main( int argc, char *argv[] )
@@ -240,8 +301,7 @@ int main( int argc, char *argv[] )
     int** custosH;
     int** custosV;
     char** shards;
-    int obj;
-    int numShardsFot;
+    solucao* sol;
     
     if( argc != 6 )
     {
@@ -286,22 +346,20 @@ int main( int argc, char *argv[] )
     
     fclose( entrada );
     
-    constroiSolucao( Sh, Sv, ganhos, custosH, custosV, shards, numSats, numShards );
+    sol = constroiSolucao( Sh, Sv, ganhos, custosH, custosV, shards, numSats, numShards );
     
-    calculaObjetivo( &obj, &numShardsFot, ganhos, shards, numSats );
-    
-    escreveSaida( obj, numShardsFot, shards, numSats, saida );
+    escreveSaida( sol, numShards, saida );
     
     fclose( saida );
     
     /* Usado apenas pra verificacao ****************************/
     int total = calculaTotal( ganhos, numSats );
-    printf( "\nFuncao Objetivo: %d\n", obj );
+    printf( "\nFuncao Objetivo: %d\n", sol->obj );
     printf( "Valor Total:     %d\n", total );
-    printf( "Porcentagem:     %f\n\n", ((float) obj / total) * 100 );
+    printf( "Porcentagem:     %f\n\n", ((float) sol->obj / total) * 100 );
     /***********************************************************/
     
-    desaloca( Sh, Sv, ganhos, custosH, custosV, shards, numSats );
+    desaloca( Sh, Sv, ganhos, custosH, custosV, shards, sol, numSats, numShards );
     
     return 0;
 }
