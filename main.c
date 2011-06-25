@@ -3,25 +3,40 @@
 #include <string.h>
 
 
+/******    TODO    *******/
+// (1) verificar se capacH e capacV serao usados novamente para ficarem na estrutura solucao
+// (2) remover funcoes de verificacao
+// (3) separar em varios arquivos
+
+
+
+/* Estrutura para armazenar a relacao ganho/custo do shard i j quando
+   ele eh fotografado pelo satelite 'sat' */
 typedef struct shardAux {
     int i, j;
     float ganhoPorCusto;
     char sat;
 } shardAux;
 
+
+/* Estrutura que armzena qual satelite fotografou shard i j */
 typedef struct shard {
     int i, j;
     char sat;
 } shard;
 
+
+/* Estrutura de uma solucao para o problema */
 typedef struct solucao {
     shard** shards;
     int obj;
     int numShardsFot;
-    int* capacH;
-    int* capacV;
+    int* capacH;      // TODO (1)
+    int* capacV;      // TODO (1)
 } solucao;
 
+
+/* Funcao para checar se foi possivel alocar memoria */
 void checaAlocacaoMemoria( void* ptr )
 {
     if( ptr == NULL )
@@ -29,14 +44,20 @@ void checaAlocacaoMemoria( void* ptr )
         fprintf( stderr, "Erro: nao foi possivel alocar memoria.\n" );
         exit (1);
     }
-}
+    
+} /* checaAlocacaoMemoria */
 
+
+/* Funcao para alocar um vetor de 'numSats' inteiros */
 void alocaVetor( int** vetor, int numSats)
 {
     *vetor = (int*) malloc( numSats * sizeof(int) );
     checaAlocacaoMemoria( *vetor );
-}
+    
+} /* alocaVetor */
 
+
+/* Funcao para alocar uma matriz quadrada de ordem 'numSats' de inteiros */
 void alocaMatrizInt( int*** matriz, int numSats )
 {
     int i;
@@ -49,8 +70,11 @@ void alocaMatrizInt( int*** matriz, int numSats )
         (*matriz)[i] = (int*) malloc( numSats * sizeof(int) );
         checaAlocacaoMemoria( (*matriz)[i] );
     }
-}
+    
+} /* alocaMatrizInt */
 
+
+/* Funcao para alocar uma matriz quadrada de ordem 'numSats' de chars */
 void alocaMatrizChar( char*** matriz, int numSats )
 {
     int i;
@@ -63,8 +87,11 @@ void alocaMatrizChar( char*** matriz, int numSats )
         (*matriz)[i] = (char*) malloc( numSats * sizeof(char) );
         checaAlocacaoMemoria( (*matriz)[i] );
     }
-}
+    
+} /* alocaMatrizChar */
 
+
+/* Funcao que le informacoes sobre os satelites no arquivo 'entrada' */
 void leSatelites( int* S, int numSats, FILE* entrada )
 {
     int i, indice;
@@ -74,8 +101,11 @@ void leSatelites( int* S, int numSats, FILE* entrada )
         fscanf( entrada, "%d", &indice );
         fscanf( entrada, "%d", &S[indice-1] );
     }
-}
+    
+} /* leSatelites */
 
+
+/* Funcao que inicializa as matrizes usadas */
 void inicializaMatrizes( int** ganhos, int** custosH, int** custosV, char** shards, int numSats )
 {
     int i, j;
@@ -89,8 +119,11 @@ void inicializaMatrizes( int** ganhos, int** custosH, int** custosV, char** shar
             shards[i][j] = 'n';
         }
     }
-}
+    
+} /* inicializaMatrizes */
 
+
+/* Funcao que le as informacoes sobre os shards no arquivo 'entrada' */
 void leShards( int** ganhos, int** custosH, int** custosV, int numSats, int numShards, FILE* entrada )
 {
     int i, j, k;
@@ -103,8 +136,11 @@ void leShards( int** ganhos, int** custosH, int** custosV, int numSats, int numS
         custosH[i-1][j-1] = custoH;
         custosV[i-1][j-1] = custoV;
     }
-}
+    
+} /* leShards */
 
+
+/* Funcao de comparacao usada pela funcao 'qsort' */
 int comparaGanhoPorCusto( const void* a, const void* b )
 {
     shardAux** shardAptr = (shardAux**) a;
@@ -113,32 +149,37 @@ int comparaGanhoPorCusto( const void* a, const void* b )
     shardAux* shardA = *shardAptr;
     shardAux* shardB = *shardBptr;
     
+    /* se o ganho/custo de A for maior que o de B, retorna -1 para ordenar em ordem decrescente */
     if( shardA->ganhoPorCusto > shardB->ganhoPorCusto )
         return -1;
     
     return ( shardA->ganhoPorCusto < shardB->ganhoPorCusto );
-}
+    
+} /* comparaGanhoPorCusto */
 
+
+/* Funcao que constroi uma solucao usando uma heuristica gulosa */
 solucao* constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** custosV, char** shards, int numSats, int numShards )
 {
-    solucao* sol;
-    shardAux** vetorShards;
-    int* capacH;
-    int* capacV;
+    solucao* sol;                    /* solucao que sera gerada */
+    shardAux** vetorGanhoPorCusto;   /* vetor com 2 elementos para cada shard: um com o ganho/custo se for fotografado por 'h' e outro se for fotografado por 'v' */
+    int* capacH;                     /* capacidade restantes nos satelites do cjt H */
+    int* capacV;                     /* capacidade restantes nos satelites do cjt V */
     int i, j, k;
     
     alocaVetor( &capacH, numSats );
     alocaVetor( &capacV, numSats );
     
+    // capacidade original eh igual a capacidade total
     memcpy( capacH, Sh, numSats * sizeof(int) );
     memcpy( capacV, Sv, numSats * sizeof(int) );
     
-    vetorShards = (shardAux**) malloc( 2 * numShards * sizeof(shardAux*) );
-    checaAlocacaoMemoria( vetorShards );
+    vetorGanhoPorCusto = (shardAux**) malloc( 2 * numShards * sizeof(shardAux*) );
+    checaAlocacaoMemoria( vetorGanhoPorCusto );
     for( k=0; k<2*numShards; k++ )
     {
-        vetorShards[k] = (shardAux*) malloc( sizeof(shardAux) );
-        checaAlocacaoMemoria( vetorShards[k] );
+        vetorGanhoPorCusto[k] = (shardAux*) malloc( sizeof(shardAux) );
+        checaAlocacaoMemoria( vetorGanhoPorCusto[k] );
     }
     
     k = 0;
@@ -146,38 +187,46 @@ solucao* constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** c
     {
         for( j=0; j<numSats; j++ )
         {
+            /* Se existe um shard no segmento i j */
             if( ganhos[i][j] != 0 )
             {
-                vetorShards[k]->i = i;
-                vetorShards[k]->j = j;
-                vetorShards[k]->sat = 'h';
-                vetorShards[k]->ganhoPorCusto = (float) ganhos[i][j] / custosH [i][j];
+                /* ganho/custo de fotografa-lo com 'h' */
+                vetorGanhoPorCusto[k]->i = i;
+                vetorGanhoPorCusto[k]->j = j;
+                vetorGanhoPorCusto[k]->sat = 'h';
+                vetorGanhoPorCusto[k]->ganhoPorCusto = (float) ganhos[i][j] / custosH [i][j];
                 k++;
                 
-                vetorShards[k]->i = i;
-                vetorShards[k]->j = j;
-                vetorShards[k]->sat = 'v';
-                vetorShards[k]->ganhoPorCusto = (float) ganhos[i][j] / custosV [i][j];
+                /* ganho/custo de fotografa-lo com 'v' */
+                vetorGanhoPorCusto[k]->i = i;
+                vetorGanhoPorCusto[k]->j = j;
+                vetorGanhoPorCusto[k]->sat = 'v';
+                vetorGanhoPorCusto[k]->ganhoPorCusto = (float) ganhos[i][j] / custosV [i][j];
                 k++;
             }
         }
     }
     
-    qsort( vetorShards, 2*numShards, sizeof(shardAux*), comparaGanhoPorCusto );
+    /* Ordena decrescentemente baseado no ganho/custo */
+    qsort( vetorGanhoPorCusto, 2*numShards, sizeof(shardAux*), comparaGanhoPorCusto );
     
+    /* Escolha gulosa: pega os shards com maiores ganho/custo */
     for( k=0; k<2*numShards; k++ )
     {
-        i = vetorShards[k]->i;
-        j = vetorShards[k]->j;
+        i = vetorGanhoPorCusto[k]->i;
+        j = vetorGanhoPorCusto[k]->j;
         
+        /* Se shard i j nao foi fotografado */
         if( shards[i][j] == 'n' )
         {
-            if( vetorShards[k]->sat == 'h' && custosH[i][j] <= capacH[i] )
+            /* ganho/custo sendo analisado eh de 'h' e nao estoura capacidade */
+            if( vetorGanhoPorCusto[k]->sat == 'h' && custosH[i][j] <= capacH[i] )
             {
                 shards[i][j] = 'h';
                 capacH[i] -= custosH[i][j];
             }
-            else if ( vetorShards[k]->sat == 'v' && custosV[i][j] <= capacV[j] )
+            /* ganho/custo sendo analisado eh de 'v' e nao estoura capacidade */
+            else if ( vetorGanhoPorCusto[k]->sat == 'v' && custosV[i][j] <= capacV[j] )
             {
                 shards[i][j] = 'v';
                 capacV[j] -= custosV[i][j];
@@ -185,15 +234,18 @@ solucao* constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** c
         }
     }
     
+    //TODO (1)
     //free( capacH );
     //free( capacV );
     //capacH = capacV = NULL;
     
+    /* Desaloca vetorGanhoPorCusto */
     for( k=0; k<2*numShards; k++ )
-        free( vetorShards[k] );
-    free( vetorShards );
-    vetorShards = NULL;
+        free( vetorGanhoPorCusto[k] );
+    free( vetorGanhoPorCusto );
+    vetorGanhoPorCusto = NULL;
     
+    /* Aloca solucao */
     sol = (solucao*) malloc( sizeof(solucao) );
     checaAlocacaoMemoria( sol );
     sol->shards = (shard**) malloc( numShards * sizeof(shard*) );
@@ -210,6 +262,7 @@ solucao* constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** c
     {
         for( j=0; j<numSats; j++ )
         {
+            /* O vetor 'shards' de solucao contem todos os shards, mesmo os nao fotografados */
             if( ganhos[i][j] != 0 )
             {
                 sol->shards[k]->i = i;
@@ -217,6 +270,7 @@ solucao* constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** c
                 sol->shards[k]->sat = shards[i][j];
                 k++;
                 
+                /* Se shard ij foi fotografado, soma seu ganho e incrementa o numero de shards fotografados */
                 if( shards[i][j] != 'n' )
                 {
                     sol->obj += ganhos[i][j];
@@ -225,27 +279,35 @@ solucao* constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** c
             }
         }
     }
+    // TODO (1)
     sol->capacH = capacH;
     sol->capacV = capacV;
     
     return sol;
-}
+    
+} /* constroiSolucao */
 
+
+/* Funcao que escreve no arquivo de saida */
 void escreveSaida( solucao* sol, int numShards, FILE* saida )
 {
     int k;
     
+    /* Funcao objetivo na primeira linha e numero de shards fotografados na segunda */
     fprintf( saida, "%d\n%d\n", sol->obj, sol->numShardsFot );
     
     for( k=0; k<numShards; k++ )
     {
         if( sol->shards[k]->sat != 'n' )
         {
+            /* i j c, onde c eh o satelite que fotografou o shard ij */
             fprintf( saida, "%d %d %c\n", sol->shards[k]->i + 1, sol->shards[k]->j + 1, sol->shards[k]->sat );
         }
     }
-}
+    
+} /* escreveSaida */
 
+/* Funcao para desalocar memoria das estruturas usadas */
 void desaloca( int* Sh, int* Sv, int** ganhos, int** custosH, int** custosV, char** shards, solucao* sol, int numSats, int numShards )
 {
     int i;
@@ -271,14 +333,18 @@ void desaloca( int* Sh, int* Sv, int** ganhos, int** custosH, int** custosV, cha
     ganhos = custosH = custosV = NULL;
     shards = NULL;
     
+    // TODO (1)
     for( i=0; i<numShards; i++ )
         free( sol->shards[i] );
     free( sol->shards );
     free( sol);
     
     sol = NULL;
-}
+    
+} /* desaloca */
 
+// TODO (2)
+// Apenas verificacao ********************************************************************
 int calculaTotal( int** ganhos, int numSats )
 {
     int total = 0;
@@ -327,29 +393,31 @@ void checaViabilidade( int* Sh, int* Sv, int numSats, FILE* saida, int** custosH
             printf("Erro: Sv[%d] = %d SvUsado[%d] = %d\n", k+1, Sv[k], k+1, SvUsado[k]);
     }
 }
+//*******************************************************************************************
 
 int main( int argc, char *argv[] )
 {
-    FILE* entrada;
-    FILE* saida;
-    int tempo;
-    int numSats;
-    int numShards;
-    int* Sh;
-    int* Sv;
-    int** ganhos;
-    int** custosH;
-    int** custosV;
-    char** shards;
-    solucao* sol;
+    FILE* entrada;      /* Arquivo de entrada */
+    FILE* saida;        /* Arquivo de saida */
+    int tempoMax;       /* Tempo maximo de execucao */
+    int numSats;        /* Numero total de satelites */
+    int numShards;      /* Numero total de shards */
+    int* Sh;            /* Capacidade dos satelites do conjunto H */
+    int* Sv;            /* Capacidade dos satelites do conjunto V */
+    int** ganhos;       /* Matriz de ganhos */
+    int** custosH;      /* Matriz de custos dos satelites de H */
+    int** custosV;      /* Matriz de custos dos satelites de V */
+    char** shards;      /* Matriz que indica qual satelite fotografou o shard */
+    solucao* sol;       /* Solucao */
     
+    /* Verifica parametros de entrada */
     if( argc != 6 )
     {
         fprintf( stderr, "Usage: heur -t <tempo> -o <saida> <entrada>\n" );
         return 1;
     }
     
-    tempo = atoi( argv[2] );
+    tempoMax = atoi( argv[2] );
     
     saida = fopen( argv[4], "w" );
     if( saida == NULL )
@@ -393,7 +461,7 @@ int main( int argc, char *argv[] )
     fclose( saida );
     
     /* Usado apenas pra verificacao ****************************/
-    
+    // TODO (2)
     int total = calculaTotal( ganhos, numSats );
     printf( "\nFuncao Objetivo: %d\n", sol->obj );
     printf( "Valor Total:     %d\n", total );
@@ -408,4 +476,5 @@ int main( int argc, char *argv[] )
     desaloca( Sh, Sv, ganhos, custosH, custosV, shards, sol, numSats, numShards );
     
     return 0;
-}
+    
+} /* main */
