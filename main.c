@@ -177,10 +177,10 @@ solucao* constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** c
                 shards[i][j] = 'h';
                 capacH[i] -= custosH[i][j];
             }
-            else if ( custosV[i][j] <= capacV[i] )
+            else if ( vetorShards[k]->sat == 'v' && custosV[i][j] <= capacV[j] )
             {
                 shards[i][j] = 'v';
-                capacV[i] -= custosV[i][j];
+                capacV[j] -= custosV[i][j];
             }
         }
     }
@@ -246,19 +246,6 @@ void escreveSaida( solucao* sol, int numShards, FILE* saida )
     }
 }
 
-int calculaTotal( int** ganhos, int numSats )
-{
-    int total = 0;
-    int i, j;
-    
-    for( i=0; i<numSats; i++)
-        for( j=0; j<numSats; j++ )
-            if( ganhos[i][j] > 0 )
-                total += ganhos[i][j];
-    
-    return total;
-}
-
 void desaloca( int* Sh, int* Sv, int** ganhos, int** custosH, int** custosV, char** shards, solucao* sol, int numSats, int numShards )
 {
     int i;
@@ -292,34 +279,52 @@ void desaloca( int* Sh, int* Sv, int** ganhos, int** custosH, int** custosV, cha
     sol = NULL;
 }
 
-void melhoraSolucao( solucao* sol, int** ganhos, int** custosH, int** custosV, int numShards )
+int calculaTotal( int** ganhos, int numSats )
 {
-    int i;
-    shard* s;
-    int* capacH = sol->capacH;
-    int* capacV = sol->capacV;
+    int total = 0;
+    int i, j;
     
-    for( i=0; i<numShards; i++ )
+    for( i=0; i<numSats; i++)
+        for( j=0; j<numSats; j++ )
+            if( ganhos[i][j] > 0 )
+                total += ganhos[i][j];
+    
+    return total;
+}
+
+void checaViabilidade( int* Sh, int* Sv, int numSats, FILE* saida, int** custosH, int** custosV )
+{
+    int i, j, k, obj, numShards;
+    int* ShUsado;
+    int* SvUsado;
+    char sat;
+    
+    ShUsado = (int*) malloc( numSats * sizeof(int) );
+    SvUsado = (int*) malloc( numSats * sizeof(int) );
+    for( k=0; k<numSats; k++ )
     {
-        s = sol->shards[i];
-        if( s->sat != 'n' )
-        {
-            continue;
-        }
-        if( custosH[s->i][s->j] <= capacH[s->i] )
-        {
-            s->sat = 'h';
-            sol->obj += ganhos[s->i][s->j];
-            sol->numShardsFot++;
-            capacH[s->i] -= custosH[s->i][s->j];
-        }
-        else if( custosV[s->i][s->j] <= capacV[s->j] )
-        {
-            s->sat = 'v';
-            sol->obj += ganhos[s->i][s->j];
-            sol->numShardsFot++;
-            capacV[s->j] -= custosV[s->i][s->j];
-        }
+        ShUsado[k] = SvUsado[k] = 0;
+    }
+    
+    fscanf( saida, "%d", &obj );
+    fscanf( saida, "%d", &numShards );
+    
+    for( k=0; k<numShards; k++ )
+    {
+        fscanf( saida, "%d %d %c", &i, &j, &sat );
+        i--;
+        j--;
+        if( sat == 'h' )
+            ShUsado[i] += custosH[i][j];
+        else
+            SvUsado[j] += custosV[i][j];
+    }
+    
+    for( k=0; k<numSats; k++ ) {
+        if( ShUsado[k] > Sh[k] )
+            printf("Erro: Sh[%d] = %d ShUsado[%d] = %d\n", k+1, Sh[k], k+1, ShUsado[k]);
+        if( SvUsado[k] > Sv[k] )
+            printf("Erro: Sv[%d] = %d SvUsado[%d] = %d\n", k+1, Sv[k], k+1, SvUsado[k]);
     }
 }
 
@@ -346,7 +351,7 @@ int main( int argc, char *argv[] )
     
     tempo = atoi( argv[2] );
     
-    saida = fopen( argv[4], "w+" );
+    saida = fopen( argv[4], "w" );
     if( saida == NULL )
     {
         fprintf( stderr, "Erro: nao foi posivel criar arquivo %s\n", argv[4] );
@@ -383,17 +388,21 @@ int main( int argc, char *argv[] )
     
     sol = constroiSolucao( Sh, Sv, ganhos, custosH, custosV, shards, numSats, numShards );
     
-    melhoraSolucao( sol, ganhos, custosH, custosV, numShards );
-    
     escreveSaida( sol, numShards, saida );
     
     fclose( saida );
     
     /* Usado apenas pra verificacao ****************************/
+    
     int total = calculaTotal( ganhos, numSats );
     printf( "\nFuncao Objetivo: %d\n", sol->obj );
     printf( "Valor Total:     %d\n", total );
     printf( "Porcentagem:     %f\n\n", ((float) sol->obj / total) * 100 );
+    
+    saida = fopen( argv[4], "r" );
+    checaViabilidade( Sh, Sv, numSats, saida, custosH, custosV );
+    fclose( saida );
+    
     /***********************************************************/
     
     desaloca( Sh, Sv, ganhos, custosH, custosV, shards, sol, numSats, numShards );
