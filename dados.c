@@ -119,19 +119,23 @@ void leShards( int** ganhos, int** custosH, int** custosV, int numSats, int numS
 
 
 /* Funcao que escreve no arquivo de saida */
-void escreveSaida( solucao* sol, int numShards, FILE* saida )
+void escreveSaida( solucao* sol, int numShards, char** shards, FILE* saida )
 {
-    int k;
+    int i, j, k;
+    char sat;
     
     /* Funcao objetivo na primeira linha e numero de shards fotografados na segunda */
     fprintf( saida, "%d\n%d\n", sol->obj, sol->numShardsFot );
     
     for( k=0; k<numShards; k++ )
     {
-        if( sol->shards[k]->sat != 'n' )
+        i = sol->shards[k]->i;
+        j = sol->shards[k]->j;
+        sat = shards[i][j];
+        if( sat != 'n' )
         {
             /* i j c, onde c eh o satelite que fotografou o shard ij */
-            fprintf( saida, "%d %d %c\n", sol->shards[k]->i + 1, sol->shards[k]->j + 1, sol->shards[k]->sat );
+            fprintf( saida, "%d %d %c\n", i + 1, j + 1, sat );
         }
     }
     

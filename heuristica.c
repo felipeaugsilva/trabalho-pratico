@@ -136,7 +136,6 @@ solucao* constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** c
             {
                 sol->shards[k]->i = i;
                 sol->shards[k]->j = j;
-                sol->shards[k]->sat = shards[i][j];
                 k++;
                 
                 /* Se shard ij foi fotografado, soma seu ganho e incrementa o numero de shards fotografados */
@@ -177,12 +176,12 @@ void melhoraSolucao( solucao* sol, int** ganhos, int** custosH, int** custosV, c
     {
         s = sol->shards[i];
         
-        if( s->sat == 'n' )
+        if( shards[s->i][s->j] == 'n' )
         {
             /* Eh possivel fotografar com um satelite de H sem estourar a capacidade */
             if( custosH[s->i][s->j] <= capacH[s->i] )
             {
-                s->sat = shards[s->i][s->j] = 'h';
+                shards[s->i][s->j] = 'h';
                 sol->obj += ganhos[s->i][s->j];
                 sol->numShardsFot++;
                 capacH[s->i] -= custosH[s->i][s->j];
@@ -190,7 +189,7 @@ void melhoraSolucao( solucao* sol, int** ganhos, int** custosH, int** custosV, c
             /* Eh possivel fotografar com um satelite de V sem estourar a capacidade */
             else if( custosV[s->i][s->j] <= capacV[s->j] )
             {
-                s->sat = shards[s->i][s->j] = 'v';
+                shards[s->i][s->j] = 'v';
                 sol->obj += ganhos[s->i][s->j];
                 sol->numShardsFot++;
                 capacV[s->j] -= custosV[s->i][s->j];
@@ -202,34 +201,31 @@ void melhoraSolucao( solucao* sol, int** ganhos, int** custosH, int** custosV, c
                 {
                     c = sol->shards[j];
                     
-                    if( c->sat != 'n' )
+                    /* Troca se for do mesmo satelite do conjunto H, se melhorar a solucao e se nao estourar a capacidade */
+                    if( s->i == c->i &&
+                        shards[c->i][c->j] == 'h' &&
+                        capacH[s->i] + custosH[c->i][c->j] - custosH[s->i][s->j] >= 0 &&
+                        sol->obj - ganhos[c->i][c->j] + ganhos[s->i][s->j] > sol->obj )
                     {
-                        /* Troca se for do mesmo satelite do conjunto H, se melhorar a solucao e se nao estourar a capacidade */
-                        if( s->i == c->i &&
-                            c->sat == 'h' &&
-                            capacH[s->i] + custosH[c->i][c->j] - custosH[s->i][s->j] >= 0 &&
-                            sol->obj - ganhos[c->i][c->j] + ganhos[s->i][s->j] > sol->obj )
-                        {
-                            c->sat = shards[c->i][c->j] = 'n';
-                            s->sat = shards[s->i][s->j] = 'h';
-                            sol->obj = sol->obj - ganhos[c->i][c->j] + ganhos[s->i][s->j];
-                            capacH[s->i] = capacH[s->i] + custosH[c->i][c->j] - custosH[s->i][s->j];
-                            
-                            break;
-                        }
-                        /* Troca se for do mesmo satelite do conjunto V, se melhorar a solucao e se nao estourar a capacidade */
-                        if( s->j == c->j &&
-                            c->sat == 'v' &&
-                            capacV[s->j] + custosV[c->i][c->j] - custosV[s->i][s->j] >= 0 &&
-                            sol->obj - ganhos[c->i][c->j] + ganhos[s->i][s->j] > sol->obj )
-                        {
-                            c->sat = shards[c->i][c->j] = 'n';
-                            s->sat = shards[s->i][s->j] = 'v';
-                            sol->obj = sol->obj - ganhos[c->i][c->j] + ganhos[s->i][s->j];
-                            capacV[s->j] = capacV[s->j] + custosV[c->i][c->j] - custosV[s->i][s->j];
-                            
-                            break;
-                        }
+                        shards[c->i][c->j] = 'n';
+                        shards[s->i][s->j] = 'h';
+                        sol->obj = sol->obj - ganhos[c->i][c->j] + ganhos[s->i][s->j];
+                        capacH[s->i] = capacH[s->i] + custosH[c->i][c->j] - custosH[s->i][s->j];
+                        
+                        break;
+                    }
+                    /* Troca se for do mesmo satelite do conjunto V, se melhorar a solucao e se nao estourar a capacidade */
+                    if( s->j == c->j &&
+                        shards[c->i][c->j] == 'v' &&
+                        capacV[s->j] + custosV[c->i][c->j] - custosV[s->i][s->j] >= 0 &&
+                        sol->obj - ganhos[c->i][c->j] + ganhos[s->i][s->j] > sol->obj )
+                    {
+                        shards[c->i][c->j] = 'n';
+                        shards[s->i][s->j] = 'v';
+                        sol->obj = sol->obj - ganhos[c->i][c->j] + ganhos[s->i][s->j];
+                        capacV[s->j] = capacV[s->j] + custosV[c->i][c->j] - custosV[s->i][s->j];
+                        
+                        break;
                     }
                 }
             }

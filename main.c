@@ -140,7 +140,7 @@ int main( int argc, char *argv[] )
     
     melhoraSolucao( sol, ganhos, custosH, custosV, shards, numShards, tempoInicio, tempoMax );
     
-    escreveSaida( sol, numShards, saida );
+    escreveSaida( sol, numShards, shards, saida );
     
     fclose( saida );
     

@@ -27,7 +27,6 @@ typedef struct {
 /* Estrutura que armzena qual satelite fotografou shard i j */
 typedef struct {
     int i, j;
-    char sat;
 } shard;
 
 
@@ -70,7 +69,7 @@ void leShards( int** ganhos, int** custosH, int** custosV, int numSats, int numS
 
 
 /* Funcao que escreve no arquivo de saida */
-void escreveSaida( solucao* sol, int numShards, FILE* saida );
+void escreveSaida( solucao* sol, int numShards, char** shards, FILE* saida );
 
 
 /* Funcao para desalocar memoria das estruturas usadas */
