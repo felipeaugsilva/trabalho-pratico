@@ -4,10 +4,9 @@
 
 
 /******    TODO    *******/
-// (1) verificar se capacH e capacV serao usados novamente para ficarem na estrutura solucao
 // (2) remover funcoes de verificacao
 // (3) separar em varios arquivos
-
+// (4) funcao escreve saida (script verificacao)
 
 
 /* Estrutura para armazenar a relacao ganho/custo do shard i j quando
@@ -31,8 +30,8 @@ typedef struct solucao {
     shard** shards;
     int obj;
     int numShardsFot;
-    int* capacH;      // TODO (1)
-    int* capacV;      // TODO (1)
+    int* capacH;
+    int* capacV;
 } solucao;
 
 
@@ -234,11 +233,6 @@ solucao* constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** c
         }
     }
     
-    //TODO (1)
-    //free( capacH );
-    //free( capacV );
-    //capacH = capacV = NULL;
-    
     /* Desaloca vetorGanhoPorCusto */
     for( k=0; k<2*numShards; k++ )
         free( vetorGanhoPorCusto[k] );
@@ -279,7 +273,7 @@ solucao* constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** c
             }
         }
     }
-    // TODO (1)
+    
     sol->capacH = capacH;
     sol->capacV = capacV;
     
@@ -290,6 +284,7 @@ solucao* constroiSolucao( int* Sh, int* Sv, int** ganhos, int** custosH, int** c
 
 /* Funcao que escreve no arquivo de saida */
 void escreveSaida( solucao* sol, int numShards, FILE* saida )
+//void escreveSaida( solucao* sol, int numShards, FILE* saida, int** custosH, int** custosV )
 {
     int k;
     
@@ -302,6 +297,7 @@ void escreveSaida( solucao* sol, int numShards, FILE* saida )
         {
             /* i j c, onde c eh o satelite que fotografou o shard ij */
             fprintf( saida, "%d %d %c\n", sol->shards[k]->i + 1, sol->shards[k]->j + 1, sol->shards[k]->sat );
+            //fprintf( saida, "%d %d %d %d %c\n", sol->shards[k]->i + 1, sol->shards[k]->j + 1, custosH[sol->shards[k]->i][sol->shards[k]->j], custosV[sol->shards[k]->i][sol->shards[k]->j], sol->shards[k]->sat );
         }
     }
     
@@ -333,15 +329,83 @@ void desaloca( int* Sh, int* Sv, int** ganhos, int** custosH, int** custosV, cha
     ganhos = custosH = custosV = NULL;
     shards = NULL;
     
-    // TODO (1)
     for( i=0; i<numShards; i++ )
         free( sol->shards[i] );
     free( sol->shards );
+    free( sol->capacH );
+    free( sol->capacV );
     free( sol);
     
     sol = NULL;
     
 } /* desaloca */
+
+void melhoraSolucao( solucao* sol, int** ganhos, int** custosH, int** custosV, char** shards, int numShards )
+{
+    int i, j;
+    shard* s;
+    shard* c;
+    int* capacH = sol->capacH;
+    int* capacV = sol->capacV;
+    
+    for( i=0; i<numShards; i++ )
+    {
+        s = sol->shards[i];
+        
+        if( s->sat == 'n' )
+        {
+            if( custosH[s->i][s->j] <= capacH[s->i] )
+            {
+                s->sat = shards[s->i][s->j] = 'h';
+                sol->obj += ganhos[s->i][s->j];
+                sol->numShardsFot++;
+                capacH[s->i] -= custosH[s->i][s->j];
+            }
+            else if( custosV[s->i][s->j] <= capacV[s->j] )
+            {
+                s->sat = shards[s->i][s->j] = 'v';
+                sol->obj += ganhos[s->i][s->j];
+                sol->numShardsFot++;
+                capacV[s->j] -= custosV[s->i][s->j];
+            }
+            else
+            {
+                for( j=0; j<numShards; j++ )
+                {
+                    c = sol->shards[j];
+                    
+                    if( c->sat != 'n' )
+                    {
+                        if( s->i == c->i &&
+                            c->sat == 'h' &&
+                            capacH[s->i] + custosH[c->i][c->j] - custosH[s->i][s->j] >= 0 &&
+                            sol->obj - ganhos[c->i][c->j] + ganhos[s->i][s->j] > sol->obj )
+                        {
+                            c->sat = shards[c->i][c->j] = 'n';
+                            s->sat = shards[s->i][s->j] = 'h';
+                            sol->obj = sol->obj - ganhos[c->i][c->j] + ganhos[s->i][s->j];
+                            capacH[s->i] = capacH[s->i] + custosH[c->i][c->j] - custosH[s->i][s->j];
+                            
+                            break;
+                        }
+                        if( s->j == c->j &&
+                            c->sat == 'v' &&
+                            capacV[s->j] + custosV[c->i][c->j] - custosV[s->i][s->j] >= 0 &&
+                            sol->obj - ganhos[c->i][c->j] + ganhos[s->i][s->j] > sol->obj )
+                        {
+                            c->sat = shards[c->i][c->j] = 'n';
+                            s->sat = shards[s->i][s->j] = 'v';
+                            sol->obj = sol->obj - ganhos[c->i][c->j] + ganhos[s->i][s->j];
+                            capacV[s->j] = capacV[s->j] + custosV[c->i][c->j] - custosV[s->i][s->j];
+                            
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 // TODO (2)
 // Apenas verificacao ********************************************************************
@@ -456,7 +520,10 @@ int main( int argc, char *argv[] )
     
     sol = constroiSolucao( Sh, Sv, ganhos, custosH, custosV, shards, numSats, numShards );
     
+    melhoraSolucao( sol, ganhos, custosH, custosV, shards, numShards );
+    
     escreveSaida( sol, numShards, saida );
+    //escreveSaida( sol, numShards, saida, custosH, custosV );
     
     fclose( saida );
     
