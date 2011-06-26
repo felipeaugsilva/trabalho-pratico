@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 
 /******    TODO    *******/
@@ -340,20 +341,30 @@ void desaloca( int* Sh, int* Sv, int** ganhos, int** custosH, int** custosV, cha
     
 } /* desaloca */
 
-void melhoraSolucao( solucao* sol, int** ganhos, int** custosH, int** custosV, char** shards, int numShards )
+
+/* Funcao para tentar melhorar a solucao */
+void melhoraSolucao( solucao* sol, int** ganhos, int** custosH, int** custosV, char** shards, int numShards, time_t tempoInicio, int tempoMax )
 {
     int i, j;
-    shard* s;
-    shard* c;
-    int* capacH = sol->capacH;
-    int* capacV = sol->capacV;
+    shard* s;                   // shard candidato a entrar na solucao
+    shard* c;                   // shard candidato a sair da solucao
+    int* capacH = sol->capacH;  // capacidade restante nos satelites do conjunto H
+    int* capacV = sol->capacV;  // capacidade restante nos satelites do conjunto V
+    int objAnterior = sol->obj; // variavel usada para verificar se valor da funcao objetivo mudou
+    int cont = 0;               // contador do numero de iteracoes sem mudanca na funcao objetivo
+    time_t tempoAtual;
     
-    for( i=0; i<numShards; i++ )
+    i = 0;
+    
+    /* Fica em loop enquanto nao estourar o tempo e enquanto a funcao objetivo estiver sendo melhorada */
+    /* Se a funcao objetivo nao for alterada por 'numShards' iteracoes, termina o loop */
+    while( difftime( time( &tempoAtual ), tempoInicio ) < (double) tempoMax && cont < numShards )
     {
         s = sol->shards[i];
         
         if( s->sat == 'n' )
         {
+            /* Eh possivel fotografar com um satelite de H sem estourar a capacidade */
             if( custosH[s->i][s->j] <= capacH[s->i] )
             {
                 s->sat = shards[s->i][s->j] = 'h';
@@ -361,6 +372,7 @@ void melhoraSolucao( solucao* sol, int** ganhos, int** custosH, int** custosV, c
                 sol->numShardsFot++;
                 capacH[s->i] -= custosH[s->i][s->j];
             }
+            /* Eh possivel fotografar com um satelite de V sem estourar a capacidade */
             else if( custosV[s->i][s->j] <= capacV[s->j] )
             {
                 s->sat = shards[s->i][s->j] = 'v';
@@ -368,6 +380,7 @@ void melhoraSolucao( solucao* sol, int** ganhos, int** custosH, int** custosV, c
                 sol->numShardsFot++;
                 capacV[s->j] -= custosV[s->i][s->j];
             }
+            /* Tenta trocar por outro shard ja na solucao */
             else
             {
                 for( j=0; j<numShards; j++ )
@@ -376,6 +389,7 @@ void melhoraSolucao( solucao* sol, int** ganhos, int** custosH, int** custosV, c
                     
                     if( c->sat != 'n' )
                     {
+                        /* Troca se for do mesmo satelite do conjunto H, se melhorar a solucao e se nao estourar a capacidade */
                         if( s->i == c->i &&
                             c->sat == 'h' &&
                             capacH[s->i] + custosH[c->i][c->j] - custosH[s->i][s->j] >= 0 &&
@@ -388,6 +402,7 @@ void melhoraSolucao( solucao* sol, int** ganhos, int** custosH, int** custosV, c
                             
                             break;
                         }
+                        /* Troca se for do mesmo satelite do conjunto V, se melhorar a solucao e se nao estourar a capacidade */
                         if( s->j == c->j &&
                             c->sat == 'v' &&
                             capacV[s->j] + custosV[c->i][c->j] - custosV[s->i][s->j] >= 0 &&
@@ -404,8 +419,17 @@ void melhoraSolucao( solucao* sol, int** ganhos, int** custosH, int** custosV, c
                 }
             }
         }
+        i = (i+1) % numShards;
+        if( sol-> obj == objAnterior )
+            cont++;
+        else
+        {
+            objAnterior = sol->obj;
+            cont = 0;
+        }
     }
-}
+    
+} /* melhoraSolucao */
 
 // TODO (2)
 // Apenas verificacao ********************************************************************
@@ -473,6 +497,9 @@ int main( int argc, char *argv[] )
     int** custosV;      /* Matriz de custos dos satelites de V */
     char** shards;      /* Matriz que indica qual satelite fotografou o shard */
     solucao* sol;       /* Solucao */
+    time_t tempoInicio;
+    
+    time( &tempoInicio );
     
     /* Verifica parametros de entrada */
     if( argc != 6 )
@@ -520,7 +547,7 @@ int main( int argc, char *argv[] )
     
     sol = constroiSolucao( Sh, Sv, ganhos, custosH, custosV, shards, numSats, numShards );
     
-    melhoraSolucao( sol, ganhos, custosH, custosV, shards, numShards );
+    melhoraSolucao( sol, ganhos, custosH, custosV, shards, numShards, tempoInicio, tempoMax );
     
     escreveSaida( sol, numShards, saida );
     //escreveSaida( sol, numShards, saida, custosH, custosV );
@@ -530,9 +557,11 @@ int main( int argc, char *argv[] )
     /* Usado apenas pra verificacao ****************************/
     // TODO (2)
     int total = calculaTotal( ganhos, numSats );
+    time_t tempoAtual;
     printf( "\nFuncao Objetivo: %d\n", sol->obj );
     printf( "Valor Total:     %d\n", total );
-    printf( "Porcentagem:     %f\n\n", ((float) sol->obj / total) * 100 );
+    printf( "Porcentagem:     %f\n", ((float) sol->obj / total) * 100 );
+    printf( "Tempo:           %.2f\n\n", difftime( time( &tempoAtual ), tempoInicio ) );
     
     saida = fopen( argv[4], "r" );
     checaViabilidade( Sh, Sv, numSats, saida, custosH, custosV );
