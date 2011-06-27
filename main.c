@@ -18,62 +18,6 @@
 
 
 
-/******    TODO    *******/
-// (2) remover funcoes de verificacao
-
-
-// TODO (2)
-// Apenas verificacao ********************************************************************
-int calculaTotal( int** ganhos, int numSats )
-{
-    int total = 0;
-    int i, j;
-    
-    for( i=0; i<numSats; i++)
-        for( j=0; j<numSats; j++ )
-            if( ganhos[i][j] > 0 )
-                total += ganhos[i][j];
-    
-    return total;
-}
-
-void checaViabilidade( int* Sh, int* Sv, int numSats, FILE* saida, int** custosH, int** custosV )
-{
-    int i, j, k, obj, numShards;
-    int* ShUsado;
-    int* SvUsado;
-    char sat;
-    
-    ShUsado = (int*) malloc( numSats * sizeof(int) );
-    SvUsado = (int*) malloc( numSats * sizeof(int) );
-    for( k=0; k<numSats; k++ )
-    {
-        ShUsado[k] = SvUsado[k] = 0;
-    }
-    
-    fscanf( saida, "%d", &obj );
-    fscanf( saida, "%d", &numShards );
-    
-    for( k=0; k<numShards; k++ )
-    {
-        fscanf( saida, "%d %d %c", &i, &j, &sat );
-        i--;
-        j--;
-        if( sat == 'h' )
-            ShUsado[i] += custosH[i][j];
-        else
-            SvUsado[j] += custosV[i][j];
-    }
-    
-    for( k=0; k<numSats; k++ ) {
-        if( ShUsado[k] > Sh[k] )
-            printf("Erro: Sh[%d] = %d ShUsado[%d] = %d\n", k+1, Sh[k], k+1, ShUsado[k]);
-        if( SvUsado[k] > Sv[k] )
-            printf("Erro: Sv[%d] = %d SvUsado[%d] = %d\n", k+1, Sv[k], k+1, SvUsado[k]);
-    }
-}
-//*******************************************************************************************
-
 int main( int argc, char *argv[] )
 {
     FILE* entrada;      /* Arquivo de entrada */
@@ -143,21 +87,6 @@ int main( int argc, char *argv[] )
     escreveSaida( sol, numShards, shards, saida );
     
     fclose( saida );
-    
-    /* Usado apenas pra verificacao ****************************/
-    // TODO (2)
-    int total = calculaTotal( ganhos, numSats );
-    time_t tempoAtual;
-    printf( "\nFuncao Objetivo: %d\n", sol->obj );
-    printf( "Valor Total:     %d\n", total );
-    printf( "Porcentagem:     %f\n", ((float) sol->obj / total) * 100 );
-    printf( "Tempo:           %.2f\n\n", difftime( time( &tempoAtual ), tempoInicio ) );
-    
-    saida = fopen( argv[4], "r" );
-    checaViabilidade( Sh, Sv, numSats, saida, custosH, custosV );
-    fclose( saida );
-    
-    /***********************************************************/
     
     desaloca( Sh, Sv, ganhos, custosH, custosV, shards, sol, numSats, numShards );
     
